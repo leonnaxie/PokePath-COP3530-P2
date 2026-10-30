@@ -7,6 +7,8 @@ def shortest_path_faster_algorithm(graph, source, target):
     dist = {v: float('inf') for v in graph}
     dist[source] = 0
 
+    parent = {v: None for v in graph}
+
     q = Queue()
     q.enqueue(source)
 
@@ -20,9 +22,22 @@ def shortest_path_faster_algorithm(graph, source, target):
         for neighbor, weight in graph[curr]:
             if dist[neighbor] > dist[curr] + weight:
                 dist[neighbor] = dist[curr] + weight
+                parent[neighbor] = curr
 
                 if (in_queue[neighbor] == False):
                     q.enqueue(neighbor)
                     in_queue[neighbor] = True
 
-    return dist[target]
+    if dist[target] == float('inf'):
+        return float('inf'), []
+
+    path = []
+    curr = target
+
+    while curr is not None:
+        path.append(curr)
+        curr = parent[curr]
+
+    path.reverse()
+
+    return dist[target], path
