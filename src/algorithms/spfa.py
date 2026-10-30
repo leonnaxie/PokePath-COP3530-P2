@@ -1,10 +1,28 @@
 """Shortest Path, Faster Algorithm - An extension of Bellman-Ford that I initially was going to do
 but thought this comparison would be more interesting compared to Dijkstra's. """
 
-from collections import deque
+from classes.queue import Queue
 
 def shortest_path_faster_algorithm(graph, source, target):
-    if source not in graph or target not in graph:
-        return None
+    dist = {v: float('inf') for v in graph}
+    dist[source] = 0
 
-    queue = deque([source])
+    q = Queue()
+    q.enqueue(source)
+
+    in_queue = {v: False for v in graph}
+    in_queue[source] = True
+
+    while not q.is_empty():
+        curr = q.dequeue()
+        in_queue[curr] = False
+
+        for neighbor, weight in graph[curr]:
+            if dist[neighbor] > dist[curr] + weight:
+                dist[neighbor] = dist[curr] + weight
+
+                if (in_queue[neighbor] == False):
+                    q.enqueue(neighbor)
+                    in_queue[neighbor] = True
+
+    return dist[target]
