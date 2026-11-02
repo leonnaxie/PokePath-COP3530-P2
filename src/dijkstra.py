@@ -59,3 +59,51 @@ class MinHeap:
                 self.items[index],
             )
             index = smallest
+
+def dijkstra(graph, start, target):
+    #Return the shortest path and cost between two Pokemon.
+    #Graph should map a Pokémon name to a list of (neighbor, weight)
+    #pairs. All edge weights must be non-negative.
+
+    if start not in graph or target not in graph:
+        raise ValueError("start and target must be in the graph")
+
+    distances = {pokemon: float("inf") for pokemon in graph}
+    previous = {}
+    distances[start] = 0
+
+    heap = MinHeap()
+    heap.push((0, start))
+
+    while not heap.is_empty():
+        current_cost, current = heap.pop()
+
+        #Older entries can remain after a shorter path is found.
+        if current_cost != distances[current]:
+            continue
+
+        if current == target:
+            break
+
+        for neighbor, weight in graph[current]:
+            if weight < 0:
+                raise ValueError("Dijkstra's algorithm needs non-negative weights")
+
+            new_cost = current_cost + weight
+            if new_cost < distances.get(neighbor, float("inf")):
+                distances[neighbor] = new_cost
+                previous[neighbor] = current
+                heap.push((new_cost, neighbor))
+
+    if distances[target] == float("inf"):
+        return [], float("inf")
+
+    path = []
+    current = target
+    while current != start:
+        path.append(current)
+        current = previous[current]
+    path.append(start)
+    path.reverse()
+
+    return path, distances[target]
