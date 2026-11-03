@@ -13,7 +13,7 @@
   --slot: #b3b3b3; --yellow: #fadf4a; --red: #d93a32; --ink: #2e2e2e;
   --pixel: "Pixelify Sans", ui-monospace, monospace;
 }
-* { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; font: 16px var(--pixel); color: var(--ink); background: var(--cream); }
 .app { display: grid; grid-template-columns: minmax(280px, 340px) 1fr; min-height: 100vh; }
@@ -76,7 +76,6 @@ body { margin: 0; font: 16px var(--pixel); color: var(--ink); background: var(--
 <main class="app">
 
   <form id="finder" class="panel" autocomplete="off">
-    <!-- Put your exported logo at src/static/logo.png; until then a text title shows -->
     <img id="logo" class="logo" src="/static/logo.png" alt="PokéPath"
          onerror="this.hidden = true; document.getElementById('logo-text').hidden = false;">
     <h1 id="logo-text" class="logo-text" hidden>PokéPath</h1>
@@ -92,7 +91,7 @@ body { margin: 0; font: 16px var(--pixel); color: var(--ink); background: var(--
     <div class="box">
       <h2>Choose your algorithm!</h2>
       <label class="check"><input type="checkbox" name="algorithm" value="dijkstra" checked> Use Dijkstra's Algorithm</label>
-      <label class="check"><input type="checkbox" name="algorithm" value="bellmanford"> Use Bellman-Ford's Algorithm</label>
+      <label class="check"><input type="checkbox" name="algorithm" value="bellmanford"> Use Bellman-Ford (SPFA)</label>
 
       <h2>Choose your path features!</h2>
       <label class="check"><input type="checkbox" name="edge" value="evolution" checked> Evolutionary relationships</label>
@@ -103,17 +102,17 @@ body { margin: 0; font: 16px var(--pixel); color: var(--ink); background: var(--
     <div class="box">
       <h2>More Info About PokePath</h2>
       <p style="font-size: 13px; line-height: 1.4; margin: 0 0 8px;">
-        Pokeapi:<br> 
-        <a href="https://pokeapi.co/" target="_blank" style="color: var(--yellow);">PokeAPI</a><br><br>
+        PokeAPI:<br> 
+        <a href="https://pokeapi.co/" target="_blank">PokeAPI</a><br><br>
         Algorithms Used:<br>
-        <a href="https://www.geeksforgeeks.org/dsa/dijkstras-shortest-path-algorithm-greedy-algo-7/" target="_blank" style="color: var(--yellow);">Dijkstra's</a><br> 
-        <a href="https://www.geeksforgeeks.org/dsa/bellman-ford-algorithm-dp-23/" target="_blank" style="color: var(--yellow);">Bellman-Ford</a> 
+        <a href="https://www.geeksforgeeks.org/dsa/dijkstras-shortest-path-algorithm-greedy-algo-7/" target="_blank">Dijkstra's</a><br> 
+        <a href="https://www.geeksforgeeks.org/dsa/shortest-path-faster-algorithm/" target="_blank">SPFA Algorithm</a> 
       </p>
       <h2 style="margin-top: 10px;">Edge Weights</h2>
       <ul style="margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5;">
         <li>Evolution: 1</li>
         <li>Shared Egg Groups: 2</li>
-        <li>Shared Moves: 5</li>
+        <li>Shared Moves: 3</li>
       </ul>
     </div>
 
@@ -131,11 +130,11 @@ const $ = (s) => document.querySelector(s);
 const results = $("#results");
 const NAMES = { dijkstra: "Dijkstra's Algorithm", bellmanford: "Bellman-Ford's Algorithm" };
 
-// How each kind of connection looks in the graph
+// Relationship labels and corresponding colors matching backend config
 const REL = {
-  direct_evolution: { label: "Evolution", color: "#2e9e3a" },
-  shared_egg_group: { label: "Egg group", color: "#e8941a" },
-  shared_move: { label: "Shared move", color: "#1f9bde" },
+  direct_evolution: { label: "Evolution", color: "#FFCB05" },
+  shared_egg_group: { label: "Egg Group", color: "#E868A2" },
+  shared_move: { label: "Shared Move", color: "#3B82F6" },
 };
 
 const picked = (name) =>
@@ -169,21 +168,16 @@ function graph(r) {
     y: n === 1 ? height / 2 : height / 2 + (i % 2 ? 45 : -45),
   }));
 
-  console.log("Path:", r.path);
-  console.log("Links:", r.links);
-  console.log("Positions:", pos);
-
   const svg = svgEl("svg", {
     viewBox: `0 0 ${width} ${height}`, width, height, role: "img",
     "aria-label": `Path graph: ${r.path.join(", ")}`,
   });
 
-  // Lines first, so the circles sit on top
-  // TEST: Draw line between every consecutive Pokemon
-  // Lines first, so the circles sit on top
+  // Draw lines with backend-provided link colors
   for (let i = 0; i < pos.length - 1; i++) {
     const a = pos[i];
     const b = pos[i + 1];
+    const link = links[i] || {};
 
     const line = svgEl("line", {
       x1: a.x,
@@ -192,15 +186,14 @@ function graph(r) {
       y2: b.y,
     });
 
-    // Force style properties so they render reliably
-    line.style.stroke = "#3b3b3b";
+    line.style.stroke = link.color || "#3b3b3b";
     line.style.strokeWidth = "6px";
     line.style.strokeLinecap = "round";
 
     svg.appendChild(line);
   }
 
-  // Start and end are orange, the Pokemon in between are blue
+  // Start and end are orange, intermediate nodes are blue
   r.path.forEach((name, i) => {
     const isEnd = i === 0 || i === n - 1;
     svg.append(svgEl("circle", {
@@ -278,15 +271,14 @@ $("#finder").addEventListener("submit", async (event) => {
   }
 });
 
-// Clear a name box when you click into it so the full list shows again;
-// restore the old name if you leave without typing anything
+// Clear input value on focus and restore if empty on blur
 for (const input of document.querySelectorAll("input.text")) {
   let saved = "";
   input.addEventListener("focus", () => { saved = input.value; input.value = ""; });
   input.addEventListener("blur", () => { if (!input.value) input.value = saved; });
 }
 
-// Autocomplete for the two name boxes
+// Autocomplete list
 fetch("/api/names").then((r) => r.json()).then((names) => {
   $("#names").replaceChildren(...names.map((n) => Object.assign(document.createElement("option"), { value: n })));
 }).catch(() => {});
