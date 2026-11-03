@@ -9,20 +9,16 @@ from poke_data import build_graph, pokemon_names
 # Flask serves everything in src/static/ (index.html, logo.png) automatically
 app = Flask(__name__)
 
-
 def as_cost_and_path(result):
     # Accepts (cost, path) or (path, cost) and always returns (cost, path)
     first, second = result
     return (second, first) if isinstance(first, list) else (first, second)
 
-
 def run_dijkstra(graph, start, end):
     return as_cost_and_path(dijkstra(graph, start, end))
 
-
 def run_spfa(graph, start, end):
     return as_cost_and_path(shortest_path_faster_algorithm(graph, start, end))
-
 
 # Each entry takes (graph, start, end) and returns (cost, path)
 ALGORITHMS = {
@@ -34,11 +30,9 @@ ALGORITHMS = {
 def home():
     return app.send_static_file("index.html")
 
-
 @app.route("/api/names")
 def names():
     return jsonify(pokemon_names())
-
 
 @app.route("/api/path")
 def find_path():
@@ -75,7 +69,6 @@ def find_path():
         })
 
     return jsonify({"results": results})
-
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
