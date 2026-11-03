@@ -11,10 +11,9 @@ API = "https://pokeapi.co/api/v2"
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "pokemon_cache.json")
 CACHE_TMP_PATH = CACHE_PATH + ".tmp"
 
-# How many Pokemon to load. The first 151 include the original Pokemon such as
-# Pikachu and Charizard while keeping the first-run PokeAPI download manageable.
-# If you change this, delete pokemon_cache.json so it reloads.
-POKEMON_LIMIT = 151
+# Load all Pokemon available from the API. Completed batches are saved to the
+# local cache so an interrupted expansion can resume without starting over.
+POKEMON_LIMIT = 1025
 
 # Two Pokemon count as "sharing moves" only if they have at least this many in common.
 # With 1, almost every pair is connected, so paths are nearly always a single hop.
@@ -50,7 +49,7 @@ def get_evolutions(evolutionary_line):
 
 def fetch_pokemon_data(limit=POKEMON_LIMIT, names=None, data=None):
     if names is None:
-        names = [p["name"] for p in _get(f"{API}/pokemon?limit={limit}")["results"]]
+        names = [p["name"] for p in _get(f"{API}/pokemon-species?limit={limit}")["results"]]
     if data is None:
         data = {}
     else:
@@ -59,8 +58,11 @@ def fetch_pokemon_data(limit=POKEMON_LIMIT, names=None, data=None):
     names = [name for name in names if name not in data]
 
     def fetch_details(name):
-        poke = _get(f"{API}/pokemon/{name}/")
         species = _get(f"{API}/pokemon-species/{name}/")
+        # A species name is not always the same as its default Pokemon record
+        # (for example, species "deoxys" uses the Pokemon "deoxys-normal").
+        pokemon_name = species["varieties"][0]["pokemon"]["name"]
+        poke = _get(f"{API}/pokemon/{pokemon_name}/")
         return name, poke, species
 
     for start in range(0, len(names), 25):
@@ -104,7 +106,7 @@ def load_data():
             data = json.load(f)
 
     if len(data) < POKEMON_LIMIT:
-        names = [p["name"] for p in _get(f"{API}/pokemon?limit={POKEMON_LIMIT}")["results"]]
+        names = [p["name"] for p in _get(f"{API}/pokemon-species?limit={POKEMON_LIMIT}")["results"]]
         data = fetch_pokemon_data(names=names, data=data)
 
     return data
