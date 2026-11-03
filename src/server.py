@@ -3,8 +3,8 @@ import time
 from flask import Flask, jsonify, request
 
 from algorithms.spfa import shortest_path_faster_algorithm
-from dijkstra import dijkstra
-from poke_data import build_graph, pokemon_names
+from algorithms.dijkstra import dijkstra
+from poke_data import build_graph, edge_between, pokemon_names
 
 # Flask serves everything in src/static/ (index.html, logo.png) automatically
 app = Flask(__name__)
@@ -23,7 +23,7 @@ def run_spfa(graph, start, end):
 # Each entry takes (graph, start, end) and returns (cost, path)
 ALGORITHMS = {
     "dijkstra": run_dijkstra,
-    "bellmanford": run_spfa,
+    "spfa": run_spfa,
 }
 
 @app.route("/")
@@ -64,6 +64,7 @@ def find_path():
         results.append({
             "algorithm": algorithm,
             "path": [name.title() for name in path],
+            "links": [edge_between(a, b, edges) for a, b in zip(path, path[1:])],
             "cost": cost,
             "time_ms": round(elapsed_ms, 3),
         })
