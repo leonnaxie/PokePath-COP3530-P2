@@ -1,39 +1,38 @@
-"""Loads Pokemon data from PokeAPI (cached on disk) and builds the graph the path finders use."""
+"""Load Pokemon data and build the graph used by the path algorithms."""
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
-
 import requests
 
 API = "https://pokeapi.co/api/v2"
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "pokemon_cache.json")
+CACHE_TMP_PATH = CACHE_PATH + ".tmp"
 
-# How many Pokemon to load. If you change this, delete pokemon_cache.json so it reloads.
+# Number of Pokemon to load from the API. The data is saved in batches so the
+# download can continue later if it gets interrupted.
 POKEMON_LIMIT = 1025
 
-# Two Pokemon count as "sharing moves" only if they have at least this many in common.
-# With 1, almost every pair is connected, so paths are nearly always a single hop.
+# The Pokemon need at least this many moves in common to share a move edge.
 MIN_SHARED_MOVES = 1
 
-# Checkbox value sent by the page -> (relationship name used on edges, edge weight)
+# Values from the page map to the relationship name and edge weight.
 FEATURES = {
     "evolution": ("direct_evolution", 1),
     "egg": ("shared_egg_group", 2),
     "moves": ("shared_move", 3),
 }
 
-
-# ---------- loading data from the API (runs once, then cached) ----------
+# loading data from the API
 
 def _get(url):
     response = requests.get(url, timeout=30)
     response.raise_for_status()
     return response.json()
 
-
 def get_evolutions(evolutionary_line):
-    """Returns (pokemon, next_pokemon) pairs for every direct evolution in a chain."""
+    """Get all of the direct evolution pairs in an evolution chain."""
     evolutions = []
     current = evolutionary_line["species"]["name"]
 
@@ -43,48 +42,72 @@ def get_evolutions(evolutionary_line):
 
     return evolutions
 
+def fetch_pokemon_data(limit=POKEMON_LIMIT, names=None, data=None):
+    if names is None:
+        names = [p["name"] for p in _get(f"{API}/pokemon-species?limit={limit}")["results"]]
+    if data is None:
+        data = {}
+    else:
+        data = dict(data)
 
-def fetch_pokemon_data(limit=POKEMON_LIMIT):
-    names = [p["name"] for p in _get(f"{API}/pokemon?limit={limit}")["results"]]
+    names = [name for name in names if name not in data]
 
-    data = {}
-    chains = {}  # evolution chains are shared by a whole family, so fetch each once
-
-    for name in names:
-        poke = _get(f"{API}/pokemon/{name}/")
+    def fetch_details(name):
         species = _get(f"{API}/pokemon-species/{name}/")
+        # Some species use a different name for their default Pokemon form.
+        pokemon_name = species["varieties"][0]["pokemon"]["name"]
+        poke = _get(f"{API}/pokemon/{pokemon_name}/")
+        return name, poke, species
 
-        chain_url = species["evolution_chain"]["url"]
-        if chain_url not in chains:
-            chains[chain_url] = get_evolutions(_get(chain_url)["chain"])
+    for start in range(0, len(names), 25):
+        batch = names[start:start + 25]
 
-        data[name] = {
-            "evolutions": chains[chain_url],
-            "egg_groups": [g["name"] for g in species["egg_groups"]],
-            "moves": [m["move"]["name"] for m in poke["moves"]],
-        }
+        # These requests do not depend on each other, so run several at once.
+        # Saving each batch also means we do not lose everything if it stops.
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            details = list(executor.map(fetch_details, batch))
+
+        chain_urls = {species["evolution_chain"]["url"] for _, _, species in details}
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            chains = dict(zip(chain_urls, executor.map(_get, chain_urls)))
+
+        for name, poke, species in details:
+            chain = chains[species["evolution_chain"]["url"]]
+            data[name] = {
+                "evolutions": get_evolutions(chain["chain"]),
+                "egg_groups": [g["name"] for g in species["egg_groups"]],
+                "moves": [m["move"]["name"] for m in poke["moves"]],
+            }
+
+        _save_cache(data)
 
     return data
 
+def _save_cache(data):
+    """Save the downloaded data without replacing a good cache halfway through."""
+    with open(CACHE_TMP_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    os.replace(CACHE_TMP_PATH, CACHE_PATH)
 
 @lru_cache(maxsize=1)
 def load_data():
-    """Reads the local cache, or downloads everything the first time."""
+    """Read the cache and download anything that is still missing."""
+    data = {}
     if os.path.exists(CACHE_PATH):
         with open(CACHE_PATH, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
 
-    data = fetch_pokemon_data()
-    with open(CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f)
+    if len(data) < POKEMON_LIMIT:
+        names = [p["name"] for p in _get(f"{API}/pokemon-species?limit={POKEMON_LIMIT}")["results"]]
+        data = fetch_pokemon_data(names=names, data=data)
+
     return data
 
-
-# ---------- building edges and the graph ----------
+# Building the graph
 
 @lru_cache(maxsize=1)
 def get_edges():
-    """Maps each connected pair (a, b) to the set of relationships between them."""
+    """Map each connected pair to the relationships between them."""
     data = load_data()
     names = list(data)
 
@@ -111,14 +134,11 @@ def get_edges():
 
     return edges
 
-
 @lru_cache(maxsize=None)
 def build_graph(features):
-    """Adjacency list using only the checked path features.
+    """Build an adjacency list using the selected path features.
 
-    features: a tuple of checkbox values, e.g. ("egg", "evolution").
-    Returns {name: [(neighbor, weight), ...]}, the shape your algorithms expect.
-    If a pair is connected in several selected ways, the cheapest edge is used.
+    If two Pokemon have more than one connection, use the lowest weight.
     """
     wanted = {FEATURES[f][0]: FEATURES[f][1] for f in features if f in FEATURES}
     graph = {name: [] for name in load_data()}
@@ -133,7 +153,7 @@ def build_graph(features):
     return graph
 
 def edge_between(a, b, features):
-    """The relationship and weight actually used for the edge a-b (None if not connected)."""
+    """Return the relationship and weight for an edge, if one exists."""
     wanted = {FEATURES[f][0]: FEATURES[f][1] for f in features if f in FEATURES}
     relationships = get_edges().get(tuple(sorted((a, b))), set())
     options = [(wanted[r], r) for r in relationships if r in wanted]
@@ -143,11 +163,10 @@ def edge_between(a, b, features):
     return {"relationship": relationship, "weight": weight}
 
 def pokemon_names():
-    """Sorted list of every loaded Pokemon name (handy for autocomplete)."""
+    """Return the loaded Pokemon names for the autocomplete list."""
     return sorted(load_data())
 
-
 if __name__ == "__main__":
-    # Run `python poke_data.py` once to download and cache the data before starting the server.
+    # Run this once to download the data before starting the server.
     g = build_graph(("evolution", "egg", "moves"))
     print(f"{len(g)} Pokemon, {sum(len(v) for v in g.values()) // 2} edges")
