@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PokéPath</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --top: #8396b3; --bottom: #62749a; --cream: #fcf6df; --edge: #3b3b3b;
+  --slot: #b3b3b3; --yellow: #fadf4a; --red: #d93a32; --ink: #2e2e2e;
+  --pixel: "Pixelify Sans", ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; font: 16px var(--pixel); color: var(--ink); background: var(--cream); }
+.app { display: grid; grid-template-columns: minmax(280px, 340px) 1fr; min-height: 100vh; }
+
+.box a {
+  color: var(--yellow);
+  text-decoration: underline;
+}
+.box a:hover {
+  color: #fff;
+}
+
+.panel { display: flex; flex-direction: column; gap: 22px; padding: 20px 18px;
+  background: linear-gradient(var(--top) 0 47%, var(--bottom) 47% 100%);
+  border-right: 8px solid var(--edge); }
+.logo { width: 100%; height: auto; image-rendering: pixelated; }
+.logo-text { margin: 0; font-size: 44px; color: var(--yellow); text-shadow: 3px 3px 0 #2b2f8f; }
+
+.box { padding: 14px; background: var(--slot); border: 5px solid var(--edge); border-radius: 6px; }
+.box label.name { display: block; margin-bottom: 6px; font-weight: 600; color: var(--yellow); text-shadow: 1px 1px 0 var(--edge); }
+.box input.text { display: block; width: 100%; margin-bottom: 22px; padding: 6px 8px; font: inherit;
+  color: var(--ink); background: #fff; border: 3px solid var(--edge); }
+.box input.text:last-of-type { margin-bottom: 6px; }
+.box input:focus-visible { outline: 3px solid var(--yellow); outline-offset: 1px; }
+.box h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; color: var(--yellow); text-shadow: 1px 1px 0 var(--edge); }
+.box h2:not(:first-child) { margin-top: 12px; }
+
+.check { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 14px; cursor: pointer; }
+.check input { appearance: none; flex: none; width: 16px; height: 16px; margin: 0; background: #fff;
+  border: 3px solid var(--edge); cursor: pointer; }
+.check input:checked { background: var(--yellow); box-shadow: inset 0 0 0 2px #fff; }
+
+.go { margin-top: auto; padding: 12px; font: 600 32px var(--pixel); color: #fff; background: var(--red);
+  border: 5px solid var(--edge); border-radius: 6px; cursor: pointer; }
+.go:hover { background: #e84a41; }
+.go:active { transform: translateY(2px); }
+
+.results { display: flex; flex-direction: column; gap: 20px; min-width: 0; padding: 28px; overflow-y: auto; }
+.hint, .error { margin: 0; font-size: 18px; line-height: 1.5; }
+.error { color: var(--red); }
+.card { padding: 16px; background: #fff; border: 4px solid var(--edge); }
+.card h3 { margin: 0 0 10px; font-size: 20px; }
+.card ol { margin: 0 0 10px; padding-left: 26px; font-size: 18px; line-height: 1.6; }
+.card p { margin: 0; font-size: 15px; }
+
+.graph { margin-top: 14px; overflow-x: auto; background: var(--cream); border: 3px solid var(--edge); }
+.graph svg { display: block; margin: 0 auto; }
+.graph text { font-family: var(--pixel); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 14px; }
+.legend i { display: inline-block; width: 24px; height: 5px; margin-right: 6px; vertical-align: middle; }
+
+@media (max-width: 720px) {
+  .app { grid-template-columns: 1fr; }
+  .panel { border-right: 0; border-bottom: 8px solid var(--edge); }
+  .go { margin-top: 0; }
+}
+</style>
+</head>
+<body>
+<main class="app">
+
+  <form id="finder" class="panel" autocomplete="off">
+    <!-- Put your exported logo at src/static/logo.png; until then a text title shows -->
+    <img id="logo" class="logo" src="/static/logo.png" alt="PokéPath"
+         onerror="this.hidden = true; document.getElementById('logo-text').hidden = false;">
+    <h1 id="logo-text" class="logo-text" hidden>PokéPath</h1>
+
+    <div class="box">
+      <label class="name" for="start">Starting Pokemon</label>
+      <input class="text" id="start" list="names" required>
+      <label class="name" for="end">Ending Pokemon</label>
+      <input class="text" id="end" list="names" required>
+      <datalist id="names"></datalist>
+    </div>
+
+    <div class="box">
+      <h2>Choose your algorithm!</h2>
+      <label class="check"><input type="checkbox" name="algorithm" value="dijkstra" checked> Use Dijkstra's Algorithm</label>
+      <label class="check"><input type="checkbox" name="algorithm" value="bellmanford"> Use Bellman-Ford's Algorithm</label>
+
+      <h2>Choose your path features!</h2>
+      <label class="check"><input type="checkbox" name="edge" value="evolution" checked> Evolutionary relationships</label>
+      <label class="check"><input type="checkbox" name="edge" value="egg"> Shared egg groups</label>
+      <label class="check"><input type="checkbox" name="edge" value="moves"> Shared moves</label>
+    </div>
+
+    <div class="box">
+      <h2>More Info About PokePath</h2>
+      <p style="font-size: 13px; line-height: 1.4; margin: 0 0 8px;">
+        Pokeapi:<br> 
+        <a href="https://pokeapi.co/" target="_blank" style="color: var(--yellow);">PokeAPI</a><br><br>
+        Algorithms Used:<br>
+        <a href="https://www.geeksforgeeks.org/dsa/dijkstras-shortest-path-algorithm-greedy-algo-7/" target="_blank" style="color: var(--yellow);">Dijkstra's</a><br> 
+        <a href="https://www.geeksforgeeks.org/dsa/bellman-ford-algorithm-dp-23/" target="_blank" style="color: var(--yellow);">Bellman-Ford</a> 
+      </p>
+      <h2 style="margin-top: 10px;">Edge Weights</h2>
+      <ul style="margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5;">
+        <li>Evolution: 1</li>
+        <li>Shared Egg Groups: 2</li>
+        <li>Shared Moves: 5</li>
+      </ul>
+    </div>
+
+    <button class="go" type="submit">GO!</button>
+  </form>
+
+  <section id="results" class="results" aria-live="polite">
+    <p class="hint">Enter two Pokemon, pick your options, and press GO!</p>
+  </section>
+
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const results = $("#results");
+const NAMES = { dijkstra: "Dijkstra's Algorithm", bellmanford: "Bellman-Ford's Algorithm" };
+
+// How each kind of connection looks in the graph
+const REL = {
+  direct_evolution: { label: "Evolution", color: "#2e9e3a" },
+  shared_egg_group: { label: "Egg group", color: "#e8941a" },
+  shared_move: { label: "Shared move", color: "#1f9bde" },
+};
+
+const picked = (name) =>
+  [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((el) => el.value);
+
+function note(text, cls = "hint") {
+  const p = document.createElement("p");
+  p.className = cls;
+  p.textContent = text;
+  return p;
+}
+const show = (...nodes) => results.replaceChildren(...nodes);
+
+// ---------- path graph (SVG) ----------
+function svgEl(tag, attrs, text) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+function graph(r) {
+  const links = r.links || [];
+  const n = r.path.length;
+  const width = Math.max(460, (n - 1) * 130 + 120);
+  const height = 240;
+
+  // Nodes zigzag left to right so labels and lines don't collide
+  const pos = r.path.map((_, i) => ({
+    x: n === 1 ? width / 2 : 60 + i * ((width - 120) / (n - 1)),
+    y: n === 1 ? height / 2 : height / 2 + (i % 2 ? 45 : -45),
+  }));
+
+  console.log("Path:", r.path);
+  console.log("Links:", r.links);
+  console.log("Positions:", pos);
+
+  const svg = svgEl("svg", {
+    viewBox: `0 0 ${width} ${height}`, width, height, role: "img",
+    "aria-label": `Path graph: ${r.path.join(", ")}`,
+  });
+
+  // Lines first, so the circles sit on top
+  // TEST: Draw line between every consecutive Pokemon
+  // Lines first, so the circles sit on top
+  for (let i = 0; i < pos.length - 1; i++) {
+    const a = pos[i];
+    const b = pos[i + 1];
+
+    const line = svgEl("line", {
+      x1: a.x,
+      y1: a.y,
+      x2: b.x,
+      y2: b.y,
+    });
+
+    // Force style properties so they render reliably
+    line.style.stroke = "#3b3b3b";
+    line.style.strokeWidth = "6px";
+    line.style.strokeLinecap = "round";
+
+    svg.appendChild(line);
+  }
+
+  // Start and end are orange, the Pokemon in between are blue
+  r.path.forEach((name, i) => {
+    const isEnd = i === 0 || i === n - 1;
+    svg.append(svgEl("circle", {
+      cx: pos[i].x, cy: pos[i].y, r: 16, fill: isEnd ? "#f5a623" : "#1da1f2",
+      stroke: "#3b3b3b", "stroke-width": 3,
+    }));
+    svg.append(svgEl("text", {
+      x: pos[i].x, y: pos[i].y + (i % 2 ? 38 : -26), "text-anchor": "middle",
+      "font-size": 14, "font-weight": 600, fill: "#2e2e2e",
+    }, name));
+  });
+
+  return svg;
+}
+
+function legend(r) {
+  const wrap = document.createElement("div");
+  wrap.className = "legend";
+  const used = [...new Set((r.links || []).map((l) => l.relationship))].filter((k) => REL[k]);
+  for (const key of used) {
+    const item = document.createElement("span");
+    const swatch = document.createElement("i");
+    swatch.style.background = REL[key].color;
+    item.append(swatch, REL[key].label);
+    wrap.append(item);
+  }
+  return wrap;
+}
+
+// ---------- result card ----------
+function card(r) {
+  const el = document.createElement("article");
+  el.className = "card";
+
+  const title = document.createElement("h3");
+  title.textContent = NAMES[r.algorithm] || r.algorithm;
+
+  const steps = document.createElement("ol");
+  r.path.forEach((n) => { const li = document.createElement("li"); li.textContent = n; steps.append(li); });
+
+  const stats = document.createElement("p");
+  stats.textContent = `Cost: ${r.cost} | Time: ${r.time_ms} ms`;
+
+  const box = document.createElement("div");
+  box.className = "graph";
+  box.append(graph(r));
+
+  el.append(title, steps, stats, box, legend(r));
+  return el;
+}
+
+$("#finder").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const algorithms = picked("algorithm");
+  const edges = picked("edge");
+
+  if (!algorithms.length) return show(note("Pick at least one algorithm.", "error"));
+  if (!edges.length) return show(note("Pick at least one path feature.", "error"));
+
+  show(note("Searching..."));
+  const params = new URLSearchParams({
+    start: $("#start").value.trim(),
+    end: $("#end").value.trim(),
+    algorithms: algorithms.join(","),
+    edges: edges.join(","),
+  });
+
+  try {
+    const res = await fetch(`/api/path?${params}`);
+    const data = await res.json();
+    if (!res.ok) return show(note(data.error || "Something went wrong.", "error"));
+    show(...data.results.map(card));
+  } catch (err) {
+    show(note("Can't reach the server. Is server.py running?", "error"));
+  }
+});
+
+// Clear a name box when you click into it so the full list shows again;
+// restore the old name if you leave without typing anything
+for (const input of document.querySelectorAll("input.text")) {
+  let saved = "";
+  input.addEventListener("focus", () => { saved = input.value; input.value = ""; });
+  input.addEventListener("blur", () => { if (!input.value) input.value = saved; });
+}
+
+// Autocomplete for the two name boxes
+fetch("/api/names").then((r) => r.json()).then((names) => {
+  $("#names").replaceChildren(...names.map((n) => Object.assign(document.createElement("option"), { value: n })));
+}).catch(() => {});
+</script>
+</body>
+</html>
