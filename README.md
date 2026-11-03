@@ -20,7 +20,7 @@ Then you start the Flask server:
 python src/server.py
 ```
 
-Open this address in your browser: http://127.0.01:5001
+Open this address in your browser: http://127.0.0.1:5001
 
 The first run might take a couple of minutes while Pokémon data is downloaded from PokeAPI. Data is saved in `src/pokemon_cache.json` to speed up future runs.
 
