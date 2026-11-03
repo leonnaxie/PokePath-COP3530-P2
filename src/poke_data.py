@@ -2,15 +2,19 @@
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
 import requests
 
 API = "https://pokeapi.co/api/v2"
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "pokemon_cache.json")
+CACHE_TMP_PATH = CACHE_PATH + ".tmp"
 
-# How many Pokemon to load. If you change this, delete pokemon_cache.json so it reloads.
-POKEMON_LIMIT = 1025
+# How many Pokemon to load. The first 151 include the original Pokemon such as
+# Pikachu and Charizard while keeping the first-run PokeAPI download manageable.
+# If you change this, delete pokemon_cache.json so it reloads.
+POKEMON_LIMIT = 151
 
 # Two Pokemon count as "sharing moves" only if they have at least this many in common.
 # With 1, almost every pair is connected, so paths are nearly always a single hop.
@@ -44,39 +48,65 @@ def get_evolutions(evolutionary_line):
     return evolutions
 
 
-def fetch_pokemon_data(limit=POKEMON_LIMIT):
-    names = [p["name"] for p in _get(f"{API}/pokemon?limit={limit}")["results"]]
+def fetch_pokemon_data(limit=POKEMON_LIMIT, names=None, data=None):
+    if names is None:
+        names = [p["name"] for p in _get(f"{API}/pokemon?limit={limit}")["results"]]
+    if data is None:
+        data = {}
+    else:
+        data = dict(data)
 
-    data = {}
-    chains = {}  # evolution chains are shared by a whole family, so fetch each once
+    names = [name for name in names if name not in data]
 
-    for name in names:
+    def fetch_details(name):
         poke = _get(f"{API}/pokemon/{name}/")
         species = _get(f"{API}/pokemon-species/{name}/")
+        return name, poke, species
 
-        chain_url = species["evolution_chain"]["url"]
-        if chain_url not in chains:
-            chains[chain_url] = get_evolutions(_get(chain_url)["chain"])
+    for start in range(0, len(names), 25):
+        batch = names[start:start + 25]
 
-        data[name] = {
-            "evolutions": chains[chain_url],
-            "egg_groups": [g["name"] for g in species["egg_groups"]],
-            "moves": [m["move"]["name"] for m in poke["moves"]],
-        }
+        # The API calls are independent. Fetching them concurrently keeps each
+        # batch small enough to cache safely if the process is interrupted.
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            details = list(executor.map(fetch_details, batch))
+
+        chain_urls = {species["evolution_chain"]["url"] for _, _, species in details}
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            chains = dict(zip(chain_urls, executor.map(_get, chain_urls)))
+
+        for name, poke, species in details:
+            chain = chains[species["evolution_chain"]["url"]]
+            data[name] = {
+                "evolutions": get_evolutions(chain["chain"]),
+                "egg_groups": [g["name"] for g in species["egg_groups"]],
+                "moves": [m["move"]["name"] for m in poke["moves"]],
+            }
+
+        _save_cache(data)
 
     return data
 
 
+def _save_cache(data):
+    """Save completed batches atomically so interrupted downloads keep progress."""
+    with open(CACHE_TMP_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    os.replace(CACHE_TMP_PATH, CACHE_PATH)
+
+
 @lru_cache(maxsize=1)
 def load_data():
-    """Reads the local cache, or downloads everything the first time."""
+    """Load cached data and download only Pokemon missing from that cache."""
+    data = {}
     if os.path.exists(CACHE_PATH):
         with open(CACHE_PATH, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
 
-    data = fetch_pokemon_data()
-    with open(CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f)
+    if len(data) < POKEMON_LIMIT:
+        names = [p["name"] for p in _get(f"{API}/pokemon?limit={POKEMON_LIMIT}")["results"]]
+        data = fetch_pokemon_data(names=names, data=data)
+
     return data
 
 
