@@ -103,16 +103,16 @@ body { margin: 0; font: 16px var(--pixel); color: var(--ink); background: var(--
       <h2>More Info About PokePath</h2>
       <p style="font-size: 13px; line-height: 1.4; margin: 0 0 8px;">
         PokeAPI:<br> 
-        <a href="https://pokeapi.co/" target="_blank">PokeAPI</a><br><br>
+        <a href="https://pokeapi.co/" target="_blank" style="color: var(--yellow);">PokeAPI</a><br><br>
         Algorithms Used:<br>
-        <a href="https://www.geeksforgeeks.org/dsa/dijkstras-shortest-path-algorithm-greedy-algo-7/" target="_blank">Dijkstra's</a><br> 
-        <a href="https://www.geeksforgeeks.org/dsa/shortest-path-faster-algorithm/" target="_blank">SPFA Algorithm</a> 
+        <a href="https://www.geeksforgeeks.org/dsa/dijkstras-shortest-path-algorithm-greedy-algo-7/" target="_blank" style="color: var(--yellow);">Dijkstra's</a><br> 
+        <a href="https://www.geeksforgeeks.org/dsa/shortest-path-faster-algorithm/" target="_blank" style="color: var(--yellow);">SPFA Algorithm</a> 
       </p>
       <h2 style="margin-top: 10px;">Edge Weights</h2>
       <ul style="margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5;">
         <li>Evolution: 1</li>
         <li>Shared Egg Groups: 2</li>
-        <li>Shared Moves: 3</li>
+        <li>Shared Moves: 5</li>
       </ul>
     </div>
 
@@ -130,11 +130,10 @@ const $ = (s) => document.querySelector(s);
 const results = $("#results");
 const NAMES = { dijkstra: "Dijkstra's Algorithm", bellmanford: "Bellman-Ford's Algorithm" };
 
-// Relationship labels and corresponding colors matching backend config
 const REL = {
-  direct_evolution: { label: "Evolution", color: "#FFCB05" },
-  shared_egg_group: { label: "Egg Group", color: "#E868A2" },
-  shared_move: { label: "Shared Move", color: "#3B82F6" },
+  direct_evolution: { label: "Evolution", color: "#FFCB05" },     // Yellow/Gold
+  shared_egg_group: { label: "Egg group", color: "#E868A2" },     // Pink
+  shared_move: { label: "Shared move", color: "#3B82F6" },       // Blue
 };
 
 const picked = (name) =>
@@ -162,7 +161,6 @@ function graph(r) {
   const width = Math.max(460, (n - 1) * 130 + 120);
   const height = 240;
 
-  // Nodes zigzag left to right so labels and lines don't collide
   const pos = r.path.map((_, i) => ({
     x: n === 1 ? width / 2 : 60 + i * ((width - 120) / (n - 1)),
     y: n === 1 ? height / 2 : height / 2 + (i % 2 ? 45 : -45),
@@ -173,7 +171,7 @@ function graph(r) {
     "aria-label": `Path graph: ${r.path.join(", ")}`,
   });
 
-  // Draw lines with backend-provided link colors
+  // Draw lines using backend-provided link colors
   for (let i = 0; i < pos.length - 1; i++) {
     const a = pos[i];
     const b = pos[i + 1];
@@ -193,7 +191,7 @@ function graph(r) {
     svg.appendChild(line);
   }
 
-  // Start and end are orange, intermediate nodes are blue
+  // Start and end nodes
   r.path.forEach((name, i) => {
     const isEnd = i === 0 || i === n - 1;
     svg.append(svgEl("circle", {
@@ -271,14 +269,12 @@ $("#finder").addEventListener("submit", async (event) => {
   }
 });
 
-// Clear input value on focus and restore if empty on blur
 for (const input of document.querySelectorAll("input.text")) {
   let saved = "";
   input.addEventListener("focus", () => { saved = input.value; input.value = ""; });
   input.addEventListener("blur", () => { if (!input.value) input.value = saved; });
 }
 
-// Autocomplete list
 fetch("/api/names").then((r) => r.json()).then((names) => {
   $("#names").replaceChildren(...names.map((n) => Object.assign(document.createElement("option"), { value: n })));
 }).catch(() => {});
