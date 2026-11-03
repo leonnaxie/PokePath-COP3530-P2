@@ -106,4 +106,4 @@ def dijkstra(graph, start, target):
     path.append(start)
     path.reverse()
 
-    return path, distances[target]
+    return distances[target], path 
