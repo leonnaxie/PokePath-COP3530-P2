@@ -58,6 +58,7 @@ body { margin: 0; font: 16px var(--pixel); color: var(--ink); background: var(--
 .card h3 { margin: 0 0 10px; font-size: 20px; }
 .card ol { margin: 0 0 10px; padding-left: 26px; font-size: 18px; line-height: 1.6; }
 .card p { margin: 0; font-size: 15px; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 32px; }
 
 .graph { margin-top: 14px; overflow-x: auto; background: var(--cream); border: 3px solid var(--edge); }
 .graph svg { display: block; margin: 0 auto; }
@@ -129,7 +130,7 @@ body { margin: 0; font: 16px var(--pixel); color: var(--ink); background: var(--
 <script>
 const $ = (s) => document.querySelector(s);
 const results = $("#results");
-const NAMES = { dijkstra: "Dijkstra's Algorithm", bellmanford: "Bellman-Ford's Algorithm" };
+const NAMES = { dijkstra: "Dijkstra's Algorithm", spfa: "Shortest Path Faster Algorithm" };
 
 // How each kind of connection looks in the graph
 const REL = {
@@ -169,17 +170,11 @@ function graph(r) {
     y: n === 1 ? height / 2 : height / 2 + (i % 2 ? 45 : -45),
   }));
 
-  console.log("Path:", r.path);
-  console.log("Links:", r.links);
-  console.log("Positions:", pos);
-
   const svg = svgEl("svg", {
     viewBox: `0 0 ${width} ${height}`, width, height, role: "img",
     "aria-label": `Path graph: ${r.path.join(", ")}`,
   });
 
-  // Lines first, so the circles sit on top
-  // TEST: Draw line between every consecutive Pokemon
   // Lines first, so the circles sit on top
   for (let i = 0; i < pos.length - 1; i++) {
     const a = pos[i];
@@ -193,7 +188,7 @@ function graph(r) {
     });
 
     // Force style properties so they render reliably
-    line.style.stroke = "#3b3b3b";
+    line.style.stroke = REL[links[i]?.relationship]?.color || "#3b3b3b";
     line.style.strokeWidth = "6px";
     line.style.strokeLinecap = "round";
 
@@ -242,7 +237,12 @@ function card(r) {
   r.path.forEach((n) => { const li = document.createElement("li"); li.textContent = n; steps.append(li); });
 
   const stats = document.createElement("p");
-  stats.textContent = `Cost: ${r.cost} | Time: ${r.time_ms} ms`;
+  stats.className = "stats";
+  const cost = document.createElement("span");
+  cost.textContent = `Cost: ${r.cost}`;
+  const time = document.createElement("span");
+  time.textContent = `Time: ${r.time_ms} ms`;
+  stats.append(cost, time);
 
   const box = document.createElement("div");
   box.className = "graph";

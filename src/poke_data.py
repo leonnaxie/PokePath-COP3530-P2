@@ -21,7 +21,7 @@ MIN_SHARED_MOVES = 1
 FEATURES = {
     "evolution": ("direct_evolution", 1),
     "egg": ("shared_egg_group", 2),
-    "moves": ("shared_move", 3),
+    "moves": ("shared_move", 5),
 }
 
 # loading data from the API
